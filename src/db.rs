@@ -1,12 +1,10 @@
-use std::mem;
-use std::ops::Deref;
-use std::sync::Arc;
-use std::marker::PhantomData;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use std::{marker::PhantomData, mem, ops::Deref, sync::Arc};
+use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::object_store::{KeyPath, ObjectStoreDuringUpgrade};
-use crate::transaction::{Transaction, TransactionDuringUpgrade, TransactionMode};
+use crate::{
+    object_store::{KeyPath, ObjectStoreDuringUpgrade},
+    transaction::{Transaction, TransactionDuringUpgrade, TransactionMode},
+};
 
 /// A handle on the database during an upgrade.
 #[derive(Debug)]
@@ -42,14 +40,18 @@ impl DbDuringUpgrade {
         if self.store_exists(name) {
             return Err(format!("an object store called \"{}\" already exists", name).into());
         }
+
         let key_path: KeyPath = key_path.into();
         let key_path: JsValue = key_path.into();
         let mut parameters = web_sys::IdbObjectStoreParameters::new();
+
         parameters.key_path(Some(&key_path));
         parameters.auto_increment(auto_increment);
+
         let store = self
             .inner
             .create_object_store_with_optional_parameters(name, &parameters)?;
+
         Ok(ObjectStoreDuringUpgrade {
             inner: store,
             db: self,
@@ -116,6 +118,9 @@ impl Db {
                 mode.into(),
             )
             .unwrap();
-        Transaction { inner, db: PhantomData }
+        Transaction {
+            inner,
+            db: PhantomData,
+        }
     }
 }

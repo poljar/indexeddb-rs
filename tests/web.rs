@@ -1,11 +1,13 @@
-use wasm_bindgen_test::*;
 use indexeddb::KeyPath;
+use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 async fn open() {
-    indexeddb::open("test", 1, |_old_version, _upgrader| ()).await.expect("Failed to open empty indexed db");
+    indexeddb::open("test", 1, |_old_version, _upgrader| ())
+        .await
+        .expect("Failed to open empty indexed db");
 }
 
 #[wasm_bindgen_test]

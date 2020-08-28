@@ -4,8 +4,7 @@ use web_sys::{IdbTransaction, IdbTransactionMode};
 
 use crate::Db;
 
-pub enum TransactionMode {
-}
+pub enum TransactionMode {}
 
 impl Into<IdbTransactionMode> for TransactionMode {
     fn into(self) -> IdbTransactionMode {
@@ -15,7 +14,7 @@ impl Into<IdbTransactionMode> for TransactionMode {
 
 pub struct Transaction<'a> {
     pub(crate) inner: IdbTransaction,
-    pub(crate) db: PhantomData<&'a Db>
+    pub(crate) db: PhantomData<&'a Db>,
 }
 
 pub struct TransactionDuringUpgrade<'a> {

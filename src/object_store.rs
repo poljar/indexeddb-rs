@@ -1,11 +1,9 @@
-use crate::db::DbDuringUpgrade;
-use crate::index::{IndexDuringUpgrade, Index};
-use std::collections::HashSet;
-use std::marker::PhantomData;
-use std::mem;
-use std::ops::Deref;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use crate::{
+    db::DbDuringUpgrade,
+    index::{Index, IndexDuringUpgrade},
+};
+use std::{collections::HashSet, marker::PhantomData, mem, ops::Deref};
+use wasm_bindgen::{prelude::*, JsCast};
 
 #[derive(Debug)]
 pub struct ObjectStoreDuringUpgrade<'a> {
@@ -50,7 +48,9 @@ impl<'a> ObjectStoreDuringUpgrade<'a> {
 
     /// Get an already-existing index.
     pub fn index(&'a self, name: &str) -> Result<IndexDuringUpgrade<'a>, JsValue> {
-        self.inner.index(name).map(|inner| IndexDuringUpgrade::new(inner, self))
+        self.inner
+            .index(name)
+            .map(|inner| IndexDuringUpgrade::new(inner, self))
     }
 }
 

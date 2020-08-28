@@ -1,6 +1,4 @@
-use std::marker::PhantomData;
-use std::mem;
-use std::ops::Deref;
+use std::{marker::PhantomData, mem, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 use crate::object_store::{ObjectStore, ObjectStoreDuringUpgrade};
