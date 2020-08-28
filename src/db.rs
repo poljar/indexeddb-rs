@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::object_store::{KeyPath, ObjectStoreDuringUpgrade};
+use crate::transaction::{Transaction, TransactionDuringUpgrade, TransactionMode};
 
 /// A handle on the database during an upgrade.
 #[derive(Debug)]
@@ -16,6 +17,7 @@ pub struct DbDuringUpgrade {
 
 impl Deref for DbDuringUpgrade {
     type Target = Db;
+
     fn deref(&self) -> &Self::Target {
         unsafe { mem::transmute(&self.inner) }
     }
@@ -68,7 +70,7 @@ impl DbDuringUpgrade {
     /// Get the transaction for this request.
     ///
     /// Will panic if called to early.
-    pub fn object_store(&self) -> ObjectStoreDuringUpgrade {
+    pub fn transaction(&self) -> TransactionDuringUpgrade {
         let inner = self
             .request
             .transaction()
@@ -117,4 +119,3 @@ impl Db {
         Transaction { inner, db: PhantomData }
     }
 }
-

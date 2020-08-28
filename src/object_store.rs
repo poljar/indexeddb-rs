@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::Deref;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 #[derive(Debug)]
 pub struct ObjectStoreDuringUpgrade<'a> {
@@ -104,7 +105,7 @@ pub enum KeyPath {
     Single(String),
     // This complains when I use it in the browser TODO investigate.
     // /// The paths to all the parts of the key.
-    // Multi(Vec<String>),
+    Multi(Vec<String>),
 }
 
 impl From<KeyPath> for JsValue {
@@ -112,7 +113,7 @@ impl From<KeyPath> for JsValue {
         match key_path {
             KeyPath::None => JsValue::NULL,
             KeyPath::Single(path) => JsValue::from(path),
-            //KeyPath::Multi(paths) => from_collection!(paths).into(),
+            KeyPath::Multi(paths) => from_collection!(paths).into(),
         }
     }
 }
@@ -124,13 +125,13 @@ impl From<JsValue> for KeyPath {
         } else if let Some(s) = val.as_string() {
             KeyPath::Single(s)
         } else {
-            panic!("expected string or null");
-            /*
             let arr = match val.dyn_into::<js_sys::Array>() {
                 Ok(v) => v,
                 Err(e) => panic!("expected array of strings, found {:?}", e),
             };
+
             let mut out = vec![];
+
             for el in arr.values().into_iter() {
                 let el = el.unwrap();
                 if let Some(val) = el.as_string() {
@@ -139,8 +140,8 @@ impl From<JsValue> for KeyPath {
                     panic!("Expected string, found {:?}", el);
                 }
             }
+
             KeyPath::Multi(out)
-            */
         }
     }
 }
