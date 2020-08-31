@@ -1,23 +1,23 @@
-use std::{marker::PhantomData, mem, ops::Deref, sync::Arc};
+use std::{marker::PhantomData, ops::Deref, sync::{Arc, Mutex}};
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
-    object_store::{KeyPath, ObjectStoreDuringUpgrade},
+    object_store::{KeyPath, ObjectStoreDuringUpgrade, ObjectStore},
     transaction::{Transaction, TransactionDuringUpgrade, TransactionMode},
 };
 
 /// A handle on the database during an upgrade.
 #[derive(Debug)]
 pub struct DbDuringUpgrade {
-    inner: web_sys::IdbDatabase,
+    db: IndexedDb,
     request: Arc<web_sys::IdbOpenDbRequest>,
 }
 
 impl Deref for DbDuringUpgrade {
-    type Target = Db;
+    type Target = IndexedDb;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { mem::transmute(&self.inner) }
+        &self.db
     }
 }
 
@@ -26,8 +26,8 @@ impl DbDuringUpgrade {
         raw: JsValue,
         request: Arc<web_sys::IdbOpenDbRequest>,
     ) -> Self {
-        let inner = web_sys::IdbDatabase::unchecked_from_js(raw);
-        DbDuringUpgrade { inner, request }
+        let db = IndexedDb { inner: Arc::new(web_sys::IdbDatabase::unchecked_from_js(raw)) };
+        DbDuringUpgrade { db, request }
     }
 
     /// Creates a new object store (roughly equivalent to a table)
@@ -49,7 +49,7 @@ impl DbDuringUpgrade {
         parameters.auto_increment(auto_increment);
 
         let store = self
-            .inner
+            .db.inner
             .create_object_store_with_optional_parameters(name, &parameters)?;
 
         Ok(ObjectStoreDuringUpgrade {
@@ -60,7 +60,7 @@ impl DbDuringUpgrade {
 
     /// Deletes an object store
     pub(crate) fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
-        self.inner.delete_object_store(name)?;
+        self.db.inner.delete_object_store(name)?;
         Ok(())
     }
 
@@ -83,13 +83,17 @@ impl DbDuringUpgrade {
 }
 
 /// A handle on the database
-#[derive(Debug)]
-#[repr(transparent)]
-pub struct Db {
-    pub(crate) inner: web_sys::IdbDatabase,
+#[derive(Debug, Clone)]
+pub struct IndexedDb {
+    pub(crate) inner: Arc<web_sys::IdbDatabase>,
 }
 
-impl Db {
+impl IndexedDb {
+    pub async fn open(name: &str, version: u32, on_upgrade_needed: impl Fn(u32, &DbDuringUpgrade) + 'static,
+    ) -> Result<IndexedDb, JsValue> {
+        crate::open(name, version, on_upgrade_needed).await
+    }
+
     /// The name of the database.
     pub fn name(&self) -> String {
         self.inner.name()
@@ -110,7 +114,7 @@ impl Db {
     /// All operations on data happen within a transaction, including read-only operations. I'm not
     /// sure yet whether beginning a transaction takes a snapshot or whether reads might give
     /// different answers.
-    pub fn transaction<'a>(&'a self, mode: TransactionMode) -> Transaction<'a> {
+    pub fn transaction(&self, mode: TransactionMode) -> Transaction {
         let inner = self
             .inner
             .transaction_with_str_sequence_and_mode(
@@ -118,9 +122,64 @@ impl Db {
                 mode.into(),
             )
             .unwrap();
+
         Transaction {
-            inner,
+            inner: Arc::new(Mutex::new(Some(inner))),
             db: PhantomData,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use wasm_bindgen_test::*;
+    use crate::{IndexedDb, KeyPath};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn open() {
+        let db = IndexedDb::open("test", 1, |_old_version, _upgrader| ())
+            .await
+            .expect("Failed to open empty indexed db");
+
+        assert_eq!(db.name(), "test");
+        assert_eq!(db.version(), 1);
+    }
+
+    #[wasm_bindgen_test]
+    async fn create_object_stores() {
+        let db = IndexedDb::open("test2", 1, |_, upgrader| {
+            let obj_store = upgrader
+                .create_object_store("test", KeyPath::None, false)
+                .unwrap();
+            assert_eq!(obj_store.key_path(), KeyPath::None);
+            assert_eq!(obj_store.auto_increment(), false);
+
+            drop(obj_store);
+
+            let obj_store = upgrader
+                .create_object_store("test2", KeyPath::Single("test".into()), true)
+                .unwrap();
+            assert_eq!(obj_store.key_path(), KeyPath::Single("test".into()));
+            assert_eq!(obj_store.auto_increment(), true);
+
+            drop(obj_store);
+
+            let obj_store = upgrader
+                .create_object_store(
+                    "test3",
+                    KeyPath::Multi(vec!["test".into(), "test2".into()]),
+                    false,
+                )
+                .unwrap();
+
+            assert_eq!(
+                obj_store.key_path(),
+                KeyPath::Multi(vec!["test".into(), "test2".into()])
+            );
+        }).await.expect("Failed to open indexed DB");
+
+        assert!(!db.object_store_names().is_empty());
     }
 }

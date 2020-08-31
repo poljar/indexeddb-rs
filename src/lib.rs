@@ -22,8 +22,6 @@ fn factory() -> web_sys::IdbFactory {
     web_sys::window().unwrap().indexed_db().unwrap().unwrap()
 }
 
-// const MAX_SAFE_INTEGER: u64 = 9007199254740991; // 2 ^ 53
-
 /// Open a database.
 ///
 /// # Panics
@@ -33,7 +31,7 @@ pub async fn open(
     name: &str,
     version: u32,
     on_upgrade_needed: impl Fn(u32, &DbDuringUpgrade) + 'static,
-) -> Result<Db, JsValue> {
+) -> Result<IndexedDb, JsValue> {
     if version == 0 {
         panic!("indexeddb version must be >= 1");
     }
@@ -43,7 +41,7 @@ pub async fn open(
     let request_copy = request.inner.clone();
 
     let onupgradeneeded = move |event: web_sys::IdbVersionChangeEvent| {
-        let old_version = cast_version(event.old_version());
+        let old_version = event.old_version() as u32;
 
         let result = match request_copy.result() {
             Ok(r) => r,
@@ -75,7 +73,7 @@ struct IdbOpenDbRequest {
 impl IdbOpenDbRequest {
     fn open(name: &str, version: u32) -> Result<IdbOpenDbRequest, JsValue> {
         // Can error because of origin rules.
-        let inner = factory().open_with_f64(name, version as f64)?;
+        let inner = factory().open_with_u32(name, version)?;
 
         Ok(IdbOpenDbRequest {
             inner: Arc::new(inner),
@@ -114,7 +112,7 @@ impl fmt::Debug for IdbOpenDbRequest {
 }
 
 impl Future for IdbOpenDbRequest {
-    type Output = Result<Db, JsValue>;
+    type Output = Result<IndexedDb, JsValue>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         use web_sys::IdbRequestReadyState as ReadyState;
@@ -139,8 +137,8 @@ impl Future for IdbOpenDbRequest {
                 Poll::Pending
             }
             ReadyState::Done => match self.inner.result() {
-                Ok(val) => Poll::Ready(Ok(Db {
-                    inner: val.unchecked_into(),
+                Ok(val) => Poll::Ready(Ok(IndexedDb {
+                    inner: Arc::new(val.unchecked_into()),
                 })),
                 Err(_) => match self.inner.error() {
                     Ok(Some(e)) => Poll::Ready(Err(e.into())),
@@ -151,26 +149,4 @@ impl Future for IdbOpenDbRequest {
             _ => panic!("unexpected ready state"),
         }
     }
-}
-
-// Some u64 numbers cannot be represented as f64. This checks as part of the cast.
-// https://stackoverflow.com/questions/3793838/which-is-the-first-integer-that-an-ieee-754-float-is-incapable-of-representing-e
-fn cast_version(val: f64) -> u32 {
-    if val < 0.0 || val > u32::max_value() as f64 {
-        panic!("out of bounds");
-    }
-    val as u32
-}
-
-#[test]
-fn test_cast() {
-    for val in vec![0u32, 1, 10] {
-        assert_eq!(cast_version(val as f64), val);
-    }
-}
-
-#[test]
-#[should_panic]
-fn test_cast_too_big() {
-    cast_version((1u64 << 54) as f64);
 }
