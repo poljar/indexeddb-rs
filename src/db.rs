@@ -3,8 +3,14 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     object_store::{KeyPath, ObjectStoreDuringUpgrade},
+    request::IdbOpenDbRequest,
     transaction::{Transaction, TransactionMode},
 };
+
+#[inline]
+fn factory() -> web_sys::IdbFactory {
+    web_sys::window().unwrap().indexed_db().unwrap().unwrap()
+}
 
 /// A handle on the database during an upgrade.
 #[derive(Debug)]
@@ -90,7 +96,14 @@ impl IndexedDb {
         version: u32,
         on_upgrade_needed: impl Fn(u32, &DbDuringUpgrade) + 'static,
     ) -> Result<IndexedDb, JsValue> {
-        crate::open(name, version, on_upgrade_needed).await
+        if version == 0 {
+            panic!("indexeddb version must be >= 1");
+        }
+
+        let request = factory().open_with_u32(name, version)?;
+        let request = IdbOpenDbRequest::new(request, on_upgrade_needed);
+
+        request.await
     }
 
     /// The name of the database.
