@@ -1,7 +1,7 @@
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex},
     pin::Pin,
+    sync::{Arc, Mutex},
 };
 
 use futures::{
@@ -9,7 +9,7 @@ use futures::{
     Future,
 };
 
-use wasm_bindgen::{JsValue, JsCast, closure::Closure};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{IdbTransaction, IdbTransactionMode};
 
 use crate::{IndexedDb, ObjectStore};
@@ -32,7 +32,6 @@ impl Into<IdbTransactionMode> for TransactionMode {
     }
 }
 
-
 pub struct Transaction<'a> {
     pub(crate) inner: Arc<Mutex<Option<IdbTransaction>>>,
     pub(crate) db: PhantomData<&'a IndexedDb>,
@@ -40,7 +39,13 @@ pub struct Transaction<'a> {
 
 impl<'a> Transaction<'a> {
     pub fn object_store(&self, name: &str) -> Result<ObjectStore, JsValue> {
-        let store = self.inner.lock().unwrap().as_ref().unwrap().object_store(name)?;
+        let store = self
+            .inner
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .object_store(name)?;
 
         Ok(ObjectStore {
             inner: store,
@@ -116,7 +121,6 @@ impl TransactionFuture {
             .set_onabort(closure.as_ref().map(|c| c.as_ref().unchecked_ref()));
         *self.on_abort.lock().unwrap() = closure;
     }
-
 }
 
 impl Future for TransactionFuture {
@@ -128,54 +132,45 @@ impl Future for TransactionFuture {
                 let waker = cx.waker().to_owned();
                 let state = self.state.clone();
 
-                let on_complete =
-                    Closure::wrap(Box::new(move || {
-                        *state.lock().unwrap() = TransactionState::Completed;
-                        waker.clone().wake()
-                    }) as Box<dyn FnMut()>);
+                let on_complete = Closure::wrap(Box::new(move || {
+                    *state.lock().unwrap() = TransactionState::Completed;
+                    waker.clone().wake()
+                }) as Box<dyn FnMut()>);
                 self.set_on_complete(Some(on_complete));
 
                 let waker = cx.waker().to_owned();
                 let state = self.state.clone();
 
-                let on_error =
-                    Closure::wrap(Box::new(move || {
-                        *state.lock().unwrap() = TransactionState::Error;
-                        waker.clone().wake()
-                    }) as Box<dyn FnMut()>);
+                let on_error = Closure::wrap(Box::new(move || {
+                    *state.lock().unwrap() = TransactionState::Error;
+                    waker.clone().wake()
+                }) as Box<dyn FnMut()>);
 
                 self.set_on_error(Some(on_error));
 
                 let waker = cx.waker().to_owned();
                 let state = self.state.clone();
 
-                let on_abort =
-                    Closure::wrap(Box::new(move || {
-                        *state.lock().unwrap() = TransactionState::Aborted;
-                        waker.clone().wake()
-                    }) as Box<dyn FnMut()>);
+                let on_abort = Closure::wrap(Box::new(move || {
+                    *state.lock().unwrap() = TransactionState::Aborted;
+                    waker.clone().wake()
+                }) as Box<dyn FnMut()>);
 
                 self.set_on_abort(Some(on_abort));
 
                 Poll::Pending
-            },
-            TransactionState::Completed => {
-                Poll::Ready(Ok(()))
-            },
-            TransactionState::Error => {
-                Poll::Ready(Err(self.inner.error().into()))
-            },
-            TransactionState::Aborted => {
-                Poll::Ready(Err(JsValue::undefined()))
             }
+            TransactionState::Completed => Poll::Ready(Ok(())),
+            TransactionState::Error => Poll::Ready(Err(self.inner.error().into())),
+            TransactionState::Aborted => Poll::Ready(Err(JsValue::undefined())),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use wasm_bindgen_test::*;
     use crate::{IndexedDb, KeyPath, TransactionMode};
+    use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
@@ -185,20 +180,32 @@ mod test {
             upgrader
                 .create_object_store("test", KeyPath::None, false)
                 .unwrap();
-        }).await.expect("Failed to open indexed DB");
+        })
+        .await
+        .expect("Failed to open indexed DB");
 
         let transaction = db.transaction(TransactionMode::ReadWrite);
 
         let store = transaction.object_store("test").unwrap();
         let key = "Hello".to_owned();
 
-        store.add(&key, &"world".to_owned()).await.expect("Can't write to the store");
-        transaction.done().await.expect("Can't await end of transaction");
+        store
+            .add(&key, &"world".to_owned())
+            .await
+            .expect("Can't write to the store");
+        transaction
+            .done()
+            .await
+            .expect("Can't await end of transaction");
 
         let transaction = db.transaction(TransactionMode::Readonly);
         let store = transaction.object_store("test").unwrap();
 
-        let value: String = store.get(&key).await.expect("Can't get string out of store").unwrap();
+        let value: String = store
+            .get(&key)
+            .await
+            .expect("Can't get string out of store")
+            .unwrap();
         assert_eq!(value, "world");
     }
 }

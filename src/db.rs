@@ -1,8 +1,12 @@
-use std::{marker::PhantomData, ops::Deref, sync::{Arc, Mutex}};
+use std::{
+    marker::PhantomData,
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
-    object_store::{KeyPath, ObjectStoreDuringUpgrade, ObjectStore},
+    object_store::{KeyPath, ObjectStoreDuringUpgrade},
     transaction::{Transaction, TransactionDuringUpgrade, TransactionMode},
 };
 
@@ -26,7 +30,9 @@ impl DbDuringUpgrade {
         raw: JsValue,
         request: Arc<web_sys::IdbOpenDbRequest>,
     ) -> Self {
-        let db = IndexedDb { inner: Arc::new(web_sys::IdbDatabase::unchecked_from_js(raw)) };
+        let db = IndexedDb {
+            inner: Arc::new(web_sys::IdbDatabase::unchecked_from_js(raw)),
+        };
         DbDuringUpgrade { db, request }
     }
 
@@ -49,7 +55,8 @@ impl DbDuringUpgrade {
         parameters.auto_increment(auto_increment);
 
         let store = self
-            .db.inner
+            .db
+            .inner
             .create_object_store_with_optional_parameters(name, &parameters)?;
 
         Ok(ObjectStoreDuringUpgrade {
@@ -89,7 +96,10 @@ pub struct IndexedDb {
 }
 
 impl IndexedDb {
-    pub async fn open(name: &str, version: u32, on_upgrade_needed: impl Fn(u32, &DbDuringUpgrade) + 'static,
+    pub async fn open(
+        name: &str,
+        version: u32,
+        on_upgrade_needed: impl Fn(u32, &DbDuringUpgrade) + 'static,
     ) -> Result<IndexedDb, JsValue> {
         crate::open(name, version, on_upgrade_needed).await
     }
@@ -132,8 +142,8 @@ impl IndexedDb {
 
 #[cfg(test)]
 mod test {
-    use wasm_bindgen_test::*;
     use crate::{IndexedDb, KeyPath};
+    use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
@@ -178,7 +188,9 @@ mod test {
                 obj_store.key_path(),
                 KeyPath::Multi(vec!["test".into(), "test2".into()])
             );
-        }).await.expect("Failed to open indexed DB");
+        })
+        .await
+        .expect("Failed to open indexed DB");
 
         assert!(!db.object_store_names().is_empty());
     }

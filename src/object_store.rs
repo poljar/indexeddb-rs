@@ -1,17 +1,17 @@
-use std::{collections::HashSet, pin::Pin, sync::{Arc, Mutex}, marker::PhantomData};
 use futures::{
     task::{Context, Poll},
     Future,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::{
+    marker::PhantomData,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{
-    db::DbDuringUpgrade,
-    transaction::Transaction,
-    index::{Index, IndexDuringUpgrade},
-};
+use crate::{db::DbDuringUpgrade, transaction::Transaction};
 
 #[derive(Debug)]
 pub struct ObjectStoreDuringUpgrade<'a> {
@@ -39,42 +39,6 @@ impl<'a> ObjectStoreDuringUpgrade<'a> {
     pub fn delete(self) -> Result<(), JsValue> {
         self.db.delete_object_store(&self.name())
     }
-
-    pub fn create_index(
-        &'a self,
-        name: &str,
-        key_path: impl Into<KeyPath>,
-        unique: bool,
-    ) -> Result<IndexDuringUpgrade<'a>, JsValue> {
-        let key_path: KeyPath = key_path.into();
-        let mut params = web_sys::IdbIndexParameters::new();
-        params.unique(unique);
-        // https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/createIndex#Exceptions
-        // we should be able to check for all error conditions at compile-time, but not yet done.
-        let index = self
-            .inner
-            .create_index_with_str_sequence_and_optional_parameters(
-                name,
-                &key_path.into(),
-                &params,
-            )?;
-        Ok(IndexDuringUpgrade {
-            inner: index,
-            parent: self,
-        })
-    }
-
-    /// Delete an index.
-    pub(crate) fn delete_index(&self, name: &str) -> Result<(), JsValue> {
-        self.inner.delete_index(name)
-    }
-
-    /// Get an already-existing index.
-    pub fn index(&'a self, name: &str) -> Result<IndexDuringUpgrade<'a>, JsValue> {
-        self.inner
-            .index(name)
-            .map(|inner| IndexDuringUpgrade::new(inner, self))
-    }
 }
 
 // impl<'a> Deref for ObjectStoreDuringUpgrade<'a> {
@@ -98,7 +62,10 @@ impl<'a> ObjectStore<'a> {
     }
 
     /// Get the value with the given key.
-    pub async fn get<V: for<'b> Deserialize<'b>>(&self, key: &impl Serialize) -> Result<Option<V>, JsValue> {
+    pub async fn get<V: for<'b> Deserialize<'b>>(
+        &self,
+        key: &impl Serialize,
+    ) -> Result<Option<V>, JsValue> {
         let key = JsValue::from_serde(&key).expect("Can't serialize key");
         let request = self.inner.get(&key)?;
 
@@ -133,16 +100,6 @@ impl<'a> ObjectStore<'a> {
     /// Whether they primary key uses an auto-generated incrementing number as its value.
     pub fn auto_increment(&self) -> bool {
         self.inner.auto_increment()
-    }
-
-    /// Get the names of the indexes on this object store.
-    pub fn index_names(&self) -> HashSet<String> {
-        to_collection!(self.inner.index_names() => HashSet<String> : insert)
-    }
-
-    /// Get an index.
-    pub fn index(&'a self, name: &'_ str) -> Result<Index<'a>, JsValue> {
-        self.inner.index(name).map(|inner| Index::new(inner, self))
     }
 }
 
@@ -203,7 +160,8 @@ impl From<Vec<String>> for KeyPath {
 }
 
 impl<S> From<&[S]> for KeyPath
-where S: AsRef<str>
+where
+    S: AsRef<str>,
 {
     fn from(inner: &[S]) -> KeyPath {
         KeyPath::Multi(inner.iter().map(|s| s.as_ref().to_owned()).collect())

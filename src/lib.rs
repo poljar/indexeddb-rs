@@ -1,11 +1,9 @@
 #[macro_use]
 mod macros;
 mod db;
-mod index;
 mod object_store;
 mod transaction;
 
-pub use crate::{db::*, index::*, object_store::*, transaction::*};
 use futures::{
     task::{Context, Poll},
     Future,
@@ -16,6 +14,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+
+pub use crate::{db::*, object_store::*, transaction::*};
 
 #[inline]
 fn factory() -> web_sys::IdbFactory {
