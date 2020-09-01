@@ -1,7 +1,4 @@
-use std::{
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{marker::PhantomData, sync::Arc};
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
@@ -74,7 +71,10 @@ impl DbDuringUpgrade {
 
     /// Is there already a store with the given name?
     fn store_exists(&self, name: &str) -> bool {
-        self.db.object_store_names().iter().any(|store| store == name)
+        self.db
+            .object_store_names()
+            .iter()
+            .any(|store| store == name)
     }
 }
 

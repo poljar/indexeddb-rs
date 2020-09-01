@@ -35,9 +35,7 @@ pub struct Transaction<'a> {
 
 impl<'a> Transaction<'a> {
     pub fn object_store(&self, name: &str) -> Result<ObjectStore, JsValue> {
-        let store = self
-            .inner
-            .object_store(name)?;
+        let store = self.inner.object_store(name)?;
 
         Ok(ObjectStore {
             inner: store,
