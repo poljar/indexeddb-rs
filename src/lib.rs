@@ -2,6 +2,7 @@
 mod macros;
 mod db;
 mod object_store;
+mod request;
 mod transaction;
 
 use futures::{

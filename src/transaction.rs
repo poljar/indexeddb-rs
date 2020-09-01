@@ -15,25 +15,21 @@ use web_sys::{IdbTransaction, IdbTransactionMode};
 use crate::{IndexedDb, ObjectStore};
 
 pub enum TransactionMode {
-    Cleanup,
     Readonly,
     ReadWrite,
-    VersionChange,
 }
 
 impl Into<IdbTransactionMode> for TransactionMode {
     fn into(self) -> IdbTransactionMode {
         match self {
-            TransactionMode::Cleanup => IdbTransactionMode::Cleanup,
             TransactionMode::Readonly => IdbTransactionMode::Readonly,
             TransactionMode::ReadWrite => IdbTransactionMode::Readwrite,
-            TransactionMode::VersionChange => IdbTransactionMode::Versionchange,
         }
     }
 }
 
 pub struct Transaction<'a> {
-    pub(crate) inner: Arc<Mutex<Option<IdbTransaction>>>,
+    pub(crate) inner: IdbTransaction,
     pub(crate) db: PhantomData<&'a IndexedDb>,
 }
 
@@ -41,10 +37,6 @@ impl<'a> Transaction<'a> {
     pub fn object_store(&self, name: &str) -> Result<ObjectStore, JsValue> {
         let store = self
             .inner
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
             .object_store(name)?;
 
         Ok(ObjectStore {
@@ -54,14 +46,14 @@ impl<'a> Transaction<'a> {
     }
 
     pub async fn done(self) -> Result<(), JsValue> {
-        let transaction = self.inner.lock().unwrap().take().unwrap();
+        let transaction = self.inner.clone();
         let transaction = TransactionFuture::new(transaction);
 
         transaction.await
     }
 
     pub async fn abort(self) -> Result<(), JsValue> {
-        let transaction = self.inner.lock().unwrap().take().unwrap();
+        let transaction = self.inner.clone();
         let transaction = TransactionFuture::new(transaction);
 
         transaction.await

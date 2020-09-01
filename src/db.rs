@@ -1,7 +1,7 @@
 use std::{
     marker::PhantomData,
     ops::Deref,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 use wasm_bindgen::{prelude::*, JsCast};
 
@@ -85,6 +85,7 @@ impl DbDuringUpgrade {
             .transaction()
             .expect("transaction not available");
         debug_assert!(inner.mode() == Ok(web_sys::IdbTransactionMode::Versionchange));
+
         TransactionDuringUpgrade { inner, db: self }
     }
 }
@@ -134,7 +135,7 @@ impl IndexedDb {
             .unwrap();
 
         Transaction {
-            inner: Arc::new(Mutex::new(Some(inner))),
+            inner,
             db: PhantomData,
         }
     }
