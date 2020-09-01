@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc};
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
-    object_store::{KeyPath, ObjectStoreDuringUpgrade},
+    object_store::{KeyPath, ObjectStore, ObjectStoreDuringUpgrade},
     request::IdbOpenDbRequest,
     transaction::{Transaction, TransactionMode},
 };
@@ -64,13 +64,13 @@ impl DbDuringUpgrade {
             .create_object_store_with_optional_parameters(name, &parameters)?;
 
         Ok(ObjectStoreDuringUpgrade {
-            inner: store,
+            inner: ObjectStore { inner: store },
             db: self,
         })
     }
 
     /// Deletes an object store
-    pub fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
+    pub(crate) fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
         self.db.inner.delete_object_store(name)?;
         Ok(())
     }

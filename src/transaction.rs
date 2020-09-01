@@ -12,7 +12,7 @@ use futures::{
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{IdbTransaction, IdbTransactionMode};
 
-use crate::{IndexedDb, ObjectStore};
+use crate::{IndexedDb, ObjectStore, TransactionObjectStore};
 
 pub enum TransactionMode {
     Readonly,
@@ -34,11 +34,11 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    pub fn object_store(&self, name: &str) -> Result<ObjectStore, JsValue> {
+    pub fn object_store(&self, name: &str) -> Result<TransactionObjectStore, JsValue> {
         let store = self.inner.object_store(name)?;
 
-        Ok(ObjectStore {
-            inner: store,
+        Ok(TransactionObjectStore {
+            inner: ObjectStore { inner: store },
             transaction: PhantomData,
         })
     }

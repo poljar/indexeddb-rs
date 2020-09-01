@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::{prelude::*, JsCast};
@@ -7,47 +7,45 @@ use crate::{db::DbDuringUpgrade, request::IndexedDbRequest, transaction::Transac
 
 #[derive(Debug)]
 pub struct ObjectStoreDuringUpgrade<'a> {
-    pub(crate) inner: web_sys::IdbObjectStore,
+    pub(crate) inner: ObjectStore,
     pub(crate) db: &'a DbDuringUpgrade,
 }
 
 impl<'a> ObjectStoreDuringUpgrade<'a> {
-    /// The name of the object store.
-    pub fn name(&self) -> String {
-        self.inner.name()
-    }
-
-    /// The key path of the object store. No key path means keys are stored out-of-tree.
-    pub fn key_path(&self) -> KeyPath {
-        self.inner.key_path().unwrap().into()
-    }
-
-    /// Whether they primary key uses an auto-generated incrementing number as its value.
-    pub fn auto_increment(&self) -> bool {
-        self.inner.auto_increment()
-    }
-
     /// Delete this object store.
     pub fn delete(self) -> Result<(), JsValue> {
         self.db.delete_object_store(&self.name())
     }
 }
 
-// impl<'a> Deref for ObjectStoreDuringUpgrade<'a> {
-//     type Target = ObjectStore<'a>;
+impl<'a> Deref for ObjectStoreDuringUpgrade<'a> {
+    type Target = ObjectStore;
 
-//     fn deref(&self) -> &Self::Target {
-//         unsafe { mem::transmute(&self.inner) }
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 
 #[derive(Debug)]
-pub struct ObjectStore<'a> {
-    pub(crate) inner: web_sys::IdbObjectStore,
+pub struct TransactionObjectStore<'a> {
+    pub(crate) inner: ObjectStore,
     pub(crate) transaction: PhantomData<&'a Transaction<'a>>,
 }
 
-impl<'a> ObjectStore<'a> {
+impl<'a> Deref for TransactionObjectStore<'a> {
+    type Target = ObjectStore;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjectStore {
+    pub(crate) inner: web_sys::IdbObjectStore,
+}
+
+impl<'a> ObjectStore {
     /// The name of the object store.
     pub fn name(&self) -> String {
         self.inner.name()

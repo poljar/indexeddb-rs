@@ -8,6 +8,6 @@ mod transaction;
 
 pub use crate::{
     db::{DbDuringUpgrade, IndexedDb},
-    object_store::{KeyPath, ObjectStore, ObjectStoreDuringUpgrade},
+    object_store::{KeyPath, ObjectStore, ObjectStoreDuringUpgrade, TransactionObjectStore},
     transaction::{Transaction, TransactionMode},
 };
