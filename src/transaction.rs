@@ -60,11 +60,6 @@ impl<'a> Transaction<'a> {
     }
 }
 
-pub struct TransactionDuringUpgrade<'a> {
-    pub(crate) inner: IdbTransaction,
-    pub(crate) db: &'a IndexedDb,
-}
-
 #[derive(Clone, Copy)]
 pub enum TransactionState {
     Pending,

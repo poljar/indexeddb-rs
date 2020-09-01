@@ -1,13 +1,12 @@
 use std::{
     marker::PhantomData,
-    ops::Deref,
     sync::Arc,
 };
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     object_store::{KeyPath, ObjectStoreDuringUpgrade},
-    transaction::{Transaction, TransactionDuringUpgrade, TransactionMode},
+    transaction::{Transaction, TransactionMode},
 };
 
 /// A handle on the database during an upgrade.
@@ -15,14 +14,6 @@ use crate::{
 pub struct DbDuringUpgrade {
     db: IndexedDb,
     request: Arc<web_sys::IdbOpenDbRequest>,
-}
-
-impl Deref for DbDuringUpgrade {
-    type Target = IndexedDb;
-
-    fn deref(&self) -> &Self::Target {
-        &self.db
-    }
 }
 
 impl DbDuringUpgrade {
@@ -34,6 +25,16 @@ impl DbDuringUpgrade {
             inner: Arc::new(web_sys::IdbDatabase::unchecked_from_js(raw)),
         };
         DbDuringUpgrade { db, request }
+    }
+
+    /// The name of the database.
+    pub fn name(&self) -> String {
+        self.db.name()
+    }
+
+    /// The current version.
+    pub fn version(&self) -> u64 {
+        self.db.version()
     }
 
     /// Creates a new object store (roughly equivalent to a table)
@@ -66,27 +67,14 @@ impl DbDuringUpgrade {
     }
 
     /// Deletes an object store
-    pub(crate) fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
+    pub fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
         self.db.inner.delete_object_store(name)?;
         Ok(())
     }
 
     /// Is there already a store with the given name?
     fn store_exists(&self, name: &str) -> bool {
-        self.object_store_names().iter().any(|test| test == name)
-    }
-
-    /// Get the transaction for this request.
-    ///
-    /// Will panic if called to early.
-    pub fn transaction(&self) -> TransactionDuringUpgrade {
-        let inner = self
-            .request
-            .transaction()
-            .expect("transaction not available");
-        debug_assert!(inner.mode() == Ok(web_sys::IdbTransactionMode::Versionchange));
-
-        TransactionDuringUpgrade { inner, db: self }
+        self.db.object_store_names().iter().any(|store| store == name)
     }
 }
 
