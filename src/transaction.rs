@@ -14,8 +14,12 @@ use web_sys::{IdbTransaction, IdbTransactionMode};
 
 use crate::{IndexedDb, ObjectStore, TransactionObjectStore};
 
+/// The mode the transaction should be opened in.
+#[derive(Debug)]
 pub enum TransactionMode {
+    /// The transaction will be opened only for reading.
     Readonly,
+    /// The transaction will be opened for reading and writing.
     ReadWrite,
 }
 
@@ -28,12 +32,33 @@ impl Into<IdbTransactionMode> for TransactionMode {
     }
 }
 
+/// Struct representing an indexeddb transaction.
+#[derive(Debug)]
 pub struct Transaction<'a> {
     pub(crate) inner: IdbTransaction,
     pub(crate) db: PhantomData<&'a IndexedDb>,
 }
 
 impl<'a> Transaction<'a> {
+    /// Get the object store with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the object store that should be fetched.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::{IndexedDb, TransactionMode};
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// # let db = IndexedDb::open("test", 1, |_, db| {
+    /// #   db.create_object_store("test").unwrap();
+    /// # }).await .expect("Failed to open indexed DB");
+    /// let transaction = db.transaction(TransactionMode::ReadWrite);
+    /// let store = transaction.object_store("test").unwrap();
+    /// # });
+    /// ```
     pub fn object_store(&self, name: &str) -> Result<TransactionObjectStore, JsValue> {
         let store = self.inner.object_store(name)?;
 
@@ -43,6 +68,27 @@ impl<'a> Transaction<'a> {
         })
     }
 
+    /// Wait for the transaction to be done.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::{IndexedDb, TransactionMode};
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// # let db = IndexedDb::open("test", 1, |_, db| {
+    /// #   db.create_object_store("test").unwrap();
+    /// # }).await .expect("Failed to open indexed DB");
+    /// let key = "Hello".to_owned();
+    /// let value = "world".to_owned();
+    ///
+    /// let transaction = db.transaction(TransactionMode::ReadWrite);
+    /// let store = transaction.object_store("test").unwrap();
+    ///
+    /// store.add(&key, &value).await;
+    /// transaction.done().await;
+    /// # });
+    /// ```
     pub async fn done(self) -> Result<(), JsValue> {
         let transaction = self.inner.clone();
         let transaction = TransactionFuture::new(transaction);
@@ -50,6 +96,8 @@ impl<'a> Transaction<'a> {
         transaction.await
     }
 
+    /// Abort the transaction cancelling all the writes that were done using
+    /// this transaction.
     pub async fn abort(self) -> Result<(), JsValue> {
         let transaction = self.inner.clone();
         let transaction = TransactionFuture::new(transaction);
@@ -58,15 +106,17 @@ impl<'a> Transaction<'a> {
     }
 }
 
+/// State a transaction future can be in.
 #[derive(Clone, Copy)]
-pub enum TransactionState {
+enum TransactionState {
     Pending,
     Completed,
     Error,
     Aborted,
 }
 
-pub struct TransactionFuture {
+/// A future that allows waiting for a transaction to be done or aborted.
+struct TransactionFuture {
     inner: IdbTransaction,
     state: Arc<Mutex<TransactionState>>,
     on_completed: Mutex<Option<Closure<dyn FnMut()>>>,
@@ -154,17 +204,15 @@ impl Future for TransactionFuture {
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexedDb, KeyPath, TransactionMode};
+    use crate::{IndexedDb, TransactionMode};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     async fn await_transaction() {
-        let db = IndexedDb::open("test2", 1, |_, upgrader| {
-            upgrader
-                .create_object_store("test", KeyPath::None, false)
-                .unwrap();
+        let db = IndexedDb::open("test2", 1, |_, db| {
+            db.create_object_store("test").unwrap();
         })
         .await
         .expect("Failed to open indexed DB");

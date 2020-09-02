@@ -5,6 +5,9 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{db::DbDuringUpgrade, request::IndexedDbRequest, transaction::Transaction};
 
+/// An object store that was created during an upgrade.
+///
+/// Object stores can only be created and deleted during database upgrades.
 #[derive(Debug)]
 pub struct ObjectStoreDuringUpgrade<'a> {
     pub(crate) inner: ObjectStore,
@@ -26,6 +29,7 @@ impl<'a> Deref for ObjectStoreDuringUpgrade<'a> {
     }
 }
 
+/// An object store that is bound to a transaction.
 #[derive(Debug)]
 pub struct TransactionObjectStore<'a> {
     pub(crate) inner: ObjectStore,
@@ -40,6 +44,7 @@ impl<'a> Deref for TransactionObjectStore<'a> {
     }
 }
 
+/// Base object store that gathers all the common object store functionality.
 #[derive(Debug)]
 pub struct ObjectStore {
     pub(crate) inner: web_sys::IdbObjectStore,
@@ -52,6 +57,33 @@ impl<'a> ObjectStore {
     }
 
     /// Get the value with the given key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key that should be used to find the associated value in
+    /// the store.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::{IndexedDb, TransactionMode};
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// # let db = IndexedDb::open("test", 1, |_, db| {
+    /// #   db.create_object_store("test").unwrap();
+    /// # }).await .expect("Failed to open indexed DB");
+    /// let transaction = db.transaction(TransactionMode::Readonly);
+    /// let store = transaction.object_store("test").unwrap();
+    ///
+    /// let key = "Hello".to_owned();
+    ///
+    /// let value: String = store
+    ///     .get(&key)
+    ///     .await
+    ///     .expect("Store error while fetching value")
+    ///     .unwrap();
+    /// # });
+    /// ```
     pub async fn get<V: for<'b> Deserialize<'b>>(
         &self,
         key: &impl Serialize,
@@ -70,6 +102,35 @@ impl<'a> ObjectStore {
         }
     }
 
+    /// Store the given value under the given key in the object store.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key that should be used to save the associated value in
+    /// the store.
+    ///
+    /// * `value` - The value that should saved in the store.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::{IndexedDb, TransactionMode};
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// # let db = IndexedDb::open("test", 1, |_, db| {
+    /// #   db.create_object_store("test").unwrap();
+    /// # }).await .expect("Failed to open indexed DB");
+    /// let transaction = db.transaction(TransactionMode::ReadWrite);
+    /// let store = transaction.object_store("test").unwrap();
+    ///
+    /// let key = "Hello".to_owned();
+    /// let value = "world".to_owned();
+    ///
+    /// store.add(&key, &value).await.unwrap();
+    /// transaction.done().await;
+    ///
+    /// # });
+    /// ```
     pub async fn add(&self, key: &impl Serialize, value: &impl Serialize) -> Result<(), JsValue> {
         let key = JsValue::from_serde(key).expect("Can't serialize key");
         let value = JsValue::from_serde(value).expect("Can't serialize value");
@@ -82,20 +143,17 @@ impl<'a> ObjectStore {
         Ok(())
     }
 
-    /// The key path of the object store. No key path means keys are stored out-of-tree.
-    pub fn key_path(&self) -> KeyPath {
+    /// The key path of the object store. No key path means keys are stored
+    /// out-of-tree.
+    #[allow(dead_code)]
+    fn key_path(&self) -> KeyPath {
         self.inner.key_path().unwrap().into()
-    }
-
-    /// Whether they primary key uses an auto-generated incrementing number as its value.
-    pub fn auto_increment(&self) -> bool {
-        self.inner.auto_increment()
     }
 }
 
 /// The path to the key in an object store.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum KeyPath {
+pub(crate) enum KeyPath {
     /// Keys are stored *out-of-tree*.
     None,
     /// The path to the single key.

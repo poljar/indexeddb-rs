@@ -30,33 +30,45 @@ impl DbDuringUpgrade {
         DbDuringUpgrade { db, request }
     }
 
-    /// The name of the database.
+    /// Get the name of this database.
     pub fn name(&self) -> String {
         self.db.name()
     }
 
-    /// The current version.
+    /// The current version of the database.
     pub fn version(&self) -> u64 {
         self.db.version()
     }
 
-    /// Creates a new object store (roughly equivalent to a table)
+    /// Create a new object store.
+    ///
+    /// * `name` - The name that the object store should be created with.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::IndexedDb;
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// let db = IndexedDb::open("test", 1, |_, db| {
+    ///     db.create_object_store("test")
+    ///         .expect("Couldn't create object store");
+    /// }).await .expect("Failed to open indexed DB");
+    /// # });
     pub fn create_object_store<'a>(
         &'a self,
         name: &str,
-        key_path: impl Into<KeyPath>,
-        auto_increment: bool,
     ) -> Result<ObjectStoreDuringUpgrade<'a>, JsValue> {
         if self.store_exists(name) {
             return Err(format!("an object store called \"{}\" already exists", name).into());
         }
 
-        let key_path: KeyPath = key_path.into();
+        let key_path: KeyPath = KeyPath::None;
         let key_path: JsValue = key_path.into();
         let mut parameters = web_sys::IdbObjectStoreParameters::new();
 
         parameters.key_path(Some(&key_path));
-        parameters.auto_increment(auto_increment);
+        parameters.auto_increment(false);
 
         let store = self
             .db
@@ -69,28 +81,79 @@ impl DbDuringUpgrade {
         })
     }
 
-    /// Deletes an object store
-    pub(crate) fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
-        self.db.inner.delete_object_store(name)?;
-        Ok(())
-    }
-
     /// Is there already a store with the given name?
-    fn store_exists(&self, name: &str) -> bool {
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the store that should be checked for existence.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::IndexedDb;
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// let db = IndexedDb::open("test", 1, |_, db| {
+    ///     db.create_object_store("test")
+    ///         .expect("Couldn't create object store");
+    ///     assert!(db.store_exists("test"));
+    /// }).await .expect("Failed to open indexed DB");
+    /// # });
+    /// ```
+    pub fn store_exists(&self, name: &str) -> bool {
         self.db
             .object_store_names()
             .iter()
             .any(|store| store == name)
     }
+
+    /// Deletes an object store
+    pub(crate) fn delete_object_store(&self, name: &str) -> Result<(), JsValue> {
+        self.db.inner.delete_object_store(name)?;
+        Ok(())
+    }
 }
 
-/// A handle on the database
+/// A handle to the opened database.
 #[derive(Debug, Clone)]
 pub struct IndexedDb {
     pub(crate) inner: Arc<web_sys::IdbDatabase>,
 }
 
 impl IndexedDb {
+    /// Open a database with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the database.
+    ///
+    /// * `version` - The current version of the database, if the database
+    /// already existed but the given version is newer the `on_upgrade_needed`
+    /// callback will be triggered. This needs to be a positive number bigger
+    /// than zero.
+    ///
+    /// * `on_upgrade_needed` - Callback that will be called if the database
+    /// needs to be upgraded, this includes the initial creation of the
+    /// database.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if the given `version` is 0.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::IndexedDb;
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// let db = IndexedDb::open("test", 1, |_, db| {
+    ///     db.create_object_store("test")
+    ///         .expect("Couldn't create object store");
+    /// }).await .expect("Failed to open indexed DB");
+    ///
+    /// assert_eq!(db.name(), "test");
+    /// # });
+    /// ```
     pub async fn open(
         name: &str,
         version: u32,
@@ -106,12 +169,12 @@ impl IndexedDb {
         request.await
     }
 
-    /// The name of the database.
+    /// Get the name of this database.
     pub fn name(&self) -> String {
         self.inner.name()
     }
 
-    /// The current version.
+    /// The current version of the database.
     pub fn version(&self) -> u64 {
         self.inner.version() as u64
     }
@@ -123,9 +186,35 @@ impl IndexedDb {
 
     /// Start a dababase transaction.
     ///
-    /// All operations on data happen within a transaction, including read-only operations. I'm not
-    /// sure yet whether beginning a transaction takes a snapshot or whether reads might give
-    /// different answers.
+    /// All read/write operations in indexeddb need to happen using a
+    /// transaction.
+    ///
+    /// This methods starts a new transaction which can be used to fetch an
+    /// object store to read/write data out of it.
+    ///
+    /// Note that the transaction might autoclose if it doesn't have left
+    /// anything to do. Awaiting on some other operation that doesn't use the
+    /// transaction might result in a closed transaction.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use indexeddb::{IndexedDb, TransactionMode};
+    /// # use futures::executor::block_on;
+    /// # block_on(async {
+    /// # let db = IndexedDb::open("test", 1, |_, db| {
+    /// #   db.create_object_store("test").unwrap();
+    /// # }).await .expect("Failed to open indexed DB");
+    ///
+    /// let transaction = db.transaction(TransactionMode::ReadWrite);
+    /// let store = transaction.object_store("test").unwrap();
+    ///
+    /// // Do some reads/writes with the object store here, but do not await
+    /// // some other future here since the transaction might autoclose.
+    ///
+    /// transaction.done().await;
+    /// # });
+    /// ```
     pub fn transaction(&self, mode: TransactionMode) -> Transaction {
         let inner = self
             .inner
@@ -144,7 +233,7 @@ impl IndexedDb {
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexedDb, KeyPath};
+    use crate::IndexedDb;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -162,34 +251,9 @@ mod test {
     #[wasm_bindgen_test]
     async fn create_object_stores() {
         let db = IndexedDb::open("test2", 1, |_, upgrader| {
-            let obj_store = upgrader
-                .create_object_store("test", KeyPath::None, false)
-                .unwrap();
-            assert_eq!(obj_store.key_path(), KeyPath::None);
-            assert_eq!(obj_store.auto_increment(), false);
+            let obj_store = upgrader.create_object_store("test").unwrap();
 
             drop(obj_store);
-
-            let obj_store = upgrader
-                .create_object_store("test2", KeyPath::Single("test".into()), true)
-                .unwrap();
-            assert_eq!(obj_store.key_path(), KeyPath::Single("test".into()));
-            assert_eq!(obj_store.auto_increment(), true);
-
-            drop(obj_store);
-
-            let obj_store = upgrader
-                .create_object_store(
-                    "test3",
-                    KeyPath::Multi(vec!["test".into(), "test2".into()]),
-                    false,
-                )
-                .unwrap();
-
-            assert_eq!(
-                obj_store.key_path(),
-                KeyPath::Multi(vec!["test".into(), "test2".into()])
-            );
         })
         .await
         .expect("Failed to open indexed DB");
